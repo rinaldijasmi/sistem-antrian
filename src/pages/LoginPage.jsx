@@ -36,12 +36,6 @@ export default function LoginPage({ setIsLoggedIn, setCurrentPage }) {
         </div>
 
         <div className="p-8 md:p-10">
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-md mb-5 text-xs text-yellow-800">
-            <strong>Demo Credentials:</strong><br />
-            Username: admin<br />
-            Password: admin123
-          </div>
-
           {error && (
             <div className="bg-red-100 text-red-800 p-3 rounded-md mb-5 border-l-4 border-red-500 flex items-center gap-2">
               <AlertCircle size={16} />

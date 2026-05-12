@@ -26,7 +26,15 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const counterRef = doc(db, 'queue_counter', 'main');
+      const serviceData = SERVICES.find(s => s.name === formData.service);
+      if (!serviceData) {
+        setAlert({ type: 'error', message: 'Layanan tidak valid!' });
+        setLoading(false);
+        return;
+      }
+
+      // Counter per kategori service
+      const counterRef = doc(db, 'service_counters', serviceData.id);
       
       const newQueueNumber = await runTransaction(db, async (transaction) => {
         const counterDoc = await transaction.get(counterRef);
@@ -39,16 +47,22 @@ export default function RegisterPage() {
         const newNumber = currentNumber + 1;
         transaction.set(counterRef, { 
           current_number: newNumber,
+          service_name: formData.service,
           last_updated: new Date().toISOString()
         }, { merge: true });
         
         return newNumber;
       });
 
+      // Format nomor dengan prefix: A001, A002, B001, B002, etc
+      const displayNumber = `${serviceData.prefix}${String(newQueueNumber).padStart(3, '0')}`;
       const formattedPhone = formatPhone(formData.whatsapp);
 
       const newQueue = {
         queueNumber: newQueueNumber,
+        displayNumber: displayNumber, // A001, B001, C001, etc
+        servicePrefix: serviceData.prefix,
+        serviceId: serviceData.id,
         nim: formData.nim,
         name: formData.name,
         whatsapp: formattedPhone,
@@ -62,7 +76,7 @@ export default function RegisterPage() {
       await addDoc(collection(db, 'queues'), newQueue);
 
       setAlert({ type: 'success', message: 'Antrian berhasil diambil!' });
-      setReceipt({ ...newQueue, queueNumber: newQueueNumber });
+      setReceipt({ ...newQueue, displayNumber });
       setFormData({ nim: '', name: '', whatsapp: '', service: '' });
 
       setTimeout(() => setAlert(null), 4000);
@@ -154,7 +168,7 @@ export default function RegisterPage() {
                 disabled={loading}
               >
                 <option value="">-- Pilih Layanan --</option>
-                {SERVICES.map(s => <option key={s} value={s}>Layanan {s}</option>)}
+                {SERVICES.map(s => <option key={s.id} value={s.name}>Layanan {s.name}</option>)}
               </select>
             </div>
 
@@ -172,7 +186,7 @@ export default function RegisterPage() {
             <div className="mt-8 p-6 md:p-8 rounded-xl border-2 border-dashed border-red-600 text-center" style={{ background: 'linear-gradient(135deg, #F5F7FA 0%, white 100%)' }}>
               <div className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-3">Nomor Antrian Anda</div>
               <div className="text-6xl md:text-7xl font-bold text-red-600 my-4 font-mono tracking-widest">
-                {String(receipt.queueNumber).padStart(3, '0')}
+                {receipt.displayNumber}
               </div>
               <div className="text-base font-semibold">{receipt.name}</div>
 

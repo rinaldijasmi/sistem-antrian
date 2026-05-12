@@ -1,11 +1,20 @@
 export const SERVICES = [
-  'TAK/SKPI',
-  'Kegiatan Mahasiswa',
-  'Prestasi',
-  'Beasiswa',
-  'Asrama',
-  'Asuransi/Kesehatan'
+  { name: 'TAK/SKPI', prefix: 'A', id: 'tak_skpi' },
+  { name: 'Kegiatan Mahasiswa', prefix: 'B', id: 'kegiatan_mahasiswa' },
+  { name: 'Prestasi', prefix: 'C', id: 'prestasi' },
+  { name: 'Beasiswa', prefix: 'D', id: 'beasiswa' },
+  { name: 'Asrama', prefix: 'E', id: 'asrama' },
+  { name: 'Asuransi/Kesehatan', prefix: 'F', id: 'asuransi_kesehatan' }
 ];
+
+// Helper untuk mendapatkan service dari name
+export const getServiceByName = (name) => SERVICES.find(s => s.name === name);
+
+// Helper untuk mendapatkan display name
+export const getServiceDisplayName = (service) => {
+  if (typeof service === 'string') return service;
+  return service.name;
+};
 
 export const ADMIN_KEY = 'admin_login_telkom';
 

@@ -1,30 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ListTodo, Info, CheckCircle, Phone, Forward, RotateCcw } from 'lucide-react';
 import { SERVICES } from '../constants';
 import { db } from '../firebase';
-import { doc, updateDoc, deleteDoc, setDoc, getDocs, collection, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, setDoc, getDocs, collection, writeBatch, query, where } from 'firebase/firestore';
 
 export default function AdminManagePage({ queues, callingQueues }) {
   const [filterService, setFilterService] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
 
-  const handleCallQueue = async (queueId, service) => {
+  const handleCallQueue = async (queueId, service, serviceId) => {
     try {
-      const previousQueueId = callingQueues[service];
-      if (previousQueueId) {
+      const previousQueueId = callingQueues[serviceId];
+      
+      // Jika ada yang sebelumnya, langsung set status ke done
+      if (previousQueueId && previousQueueId !== queueId) {
         await updateDoc(doc(db, 'queues', previousQueueId), { 
           status: 'done',
           finished_at: new Date().toISOString()
         });
       }
 
+      // Update queue baru ke calling
       await updateDoc(doc(db, 'queues', queueId), { 
         status: 'calling',
         called_at: new Date().toISOString()
       });
 
-      await setDoc(doc(db, 'calling_queues', service), {
+      // Simpan ke calling_queues dengan key serviceId
+      await setDoc(doc(db, 'calling_queues', serviceId), {
         queue_id: queueId,
+        service_name: service,
         called_at: new Date().toISOString()
       });
     } catch (error) {
@@ -33,18 +38,22 @@ export default function AdminManagePage({ queues, callingQueues }) {
     }
   };
 
-  const handleFinishService = async (service) => {
+  const handleFinishService = async (serviceId) => {
     try {
-      const queueId = callingQueues[service];
+      const queueId = callingQueues[serviceId];
       if (queueId) {
+        // Set antrian selesai
         await updateDoc(doc(db, 'queues', queueId), { 
           status: 'done',
           finished_at: new Date().toISOString()
         });
-        await deleteDoc(doc(db, 'calling_queues', service));
+        
+        // Hapus dari calling_queues
+        await deleteDoc(doc(db, 'calling_queues', serviceId));
       }
     } catch (error) {
       console.error('Error finishing service:', error);
+      alert('Gagal menyelesaikan layanan');
     }
   };
 
@@ -56,6 +65,7 @@ export default function AdminManagePage({ queues, callingQueues }) {
       });
     } catch (error) {
       console.error('Error skipping queue:', error);
+      alert('Gagal skip antrian');
     }
   };
 
@@ -75,19 +85,25 @@ export default function AdminManagePage({ queues, callingQueues }) {
     try {
       const batch = writeBatch(db);
 
+      // Hapus semua antrian aktif (bukan yang sudah done)
       const activeQueues = queues.filter(q => q.status !== 'done');
       activeQueues.forEach(q => {
         batch.delete(doc(db, 'queues', q.id));
       });
 
+      // Hapus semua calling_queues
       const callingSnapshot = await getDocs(collection(db, 'calling_queues'));
       callingSnapshot.forEach(d => {
         batch.delete(doc(db, 'calling_queues', d.id));
       });
 
-      batch.set(doc(db, 'queue_counter', 'main'), {
-        current_number: 0,
-        last_reset: new Date().toISOString()
+      // Reset semua service counters
+      const counterSnapshot = await getDocs(collection(db, 'service_counters'));
+      counterSnapshot.forEach(d => {
+        batch.update(doc(db, 'service_counters', d.id), {
+          current_number: 0,
+          last_reset: new Date().toISOString()
+        });
       });
 
       await batch.commit();
@@ -100,9 +116,20 @@ export default function AdminManagePage({ queues, callingQueues }) {
     }
   };
 
+  // Filter berdasarkan service yang dipilih
   const filteredQueues = queues
     .filter(q => q.status === 'waiting' && (!filterService || q.service === filterService))
     .sort((a, b) => a.queueNumber - b.queueNumber);
+
+  // Get service display name
+  const getServiceName = (serviceName) => {
+    return serviceName;
+  };
+
+  const getServiceId = (serviceName) => {
+    const service = SERVICES.find(s => s.name === serviceName);
+    return service?.id || '';
+  };
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6">
@@ -121,7 +148,7 @@ export default function AdminManagePage({ queues, callingQueues }) {
 
       <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-md mb-6 text-sm text-blue-900">
         <Info size={14} className="inline mr-2" />
-        <strong>Multi-Category Calling:</strong> Anda bisa memanggil beberapa nomor sekaligus dari kategori berbeda.
+        <strong>Multi-Category Calling:</strong> Setiap kategori memiliki nomor antrian terpisah dengan prefix (A, B, C, dst).
       </div>
 
       <div className="grid lg:grid-cols-[280px_1fr] gap-6">
@@ -137,13 +164,13 @@ export default function AdminManagePage({ queues, callingQueues }) {
           </button>
           {SERVICES.map(service => (
             <button
-              key={service}
+              key={service.id}
               className={`block w-full px-4 py-3 border-2 rounded-md font-semibold cursor-pointer mb-2 text-left text-xs transition-all ${
-                filterService === service ? 'bg-red-600 text-white border-red-600' : 'border-gray-200 hover:border-red-600 hover:text-red-600'
+                filterService === service.name ? 'bg-red-600 text-white border-red-600' : 'border-gray-200 hover:border-red-600 hover:text-red-600'
               }`}
-              onClick={() => setFilterService(service)}
+              onClick={() => setFilterService(service.name)}
             >
-              {service}
+              <span className="font-bold">[{service.prefix}]</span> {service.name}
             </button>
           ))}
         </div>
@@ -155,19 +182,19 @@ export default function AdminManagePage({ queues, callingQueues }) {
                 Sedang Dilayani ({Object.keys(callingQueues).length})
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Object.entries(callingQueues).map(([service, queueId]) => {
+                {Object.entries(callingQueues).map(([serviceId, queueId]) => {
                   const queue = queues.find(q => q.id === queueId);
                   if (!queue) return null;
                   return (
-                    <div key={service} className="text-white p-6 rounded-xl text-center shadow-lg" style={{ background: 'linear-gradient(135deg, #E31E24 0%, #8B7355 100%)' }}>
+                    <div key={serviceId} className="text-white p-6 rounded-xl text-center shadow-lg" style={{ background: 'linear-gradient(135deg, #E31E24 0%, #8B7355 100%)' }}>
                       <div className="text-xs opacity-90 uppercase font-bold tracking-wider mb-2">Sedang Dilayani</div>
-                      <div className="text-xs font-semibold mb-2 opacity-95">{service}</div>
+                      <div className="text-xs font-semibold mb-2 opacity-95">{queue.service}</div>
                       <div className="text-5xl md:text-6xl font-bold my-3 font-mono">
-                        {String(queue.queueNumber).padStart(3, '0')}
+                        {queue.displayNumber || String(queue.queueNumber).padStart(3, '0')}
                       </div>
                       <div className="text-sm font-semibold mb-3">{queue.name}</div>
                       <button
-                        onClick={() => handleFinishService(service)}
+                        onClick={() => handleFinishService(serviceId)}
                         className="px-4 py-2 bg-white text-red-600 rounded-md text-xs font-bold hover:bg-gray-100 transition-all flex items-center gap-1 mx-auto"
                       >
                         <CheckCircle size={14} /> Selesai
@@ -191,7 +218,8 @@ export default function AdminManagePage({ queues, callingQueues }) {
             ) : (
               <div className="space-y-3">
                 {filteredQueues.map((queue, i) => {
-                  const isCurrentlyServing = callingQueues[queue.service];
+                  const serviceId = getServiceId(queue.service);
+                  const isCurrentlyServing = callingQueues[serviceId];
                   const isFirstInCategory = filteredQueues.findIndex(q => q.service === queue.service) === i;
                   return (
                     <div
@@ -204,7 +232,7 @@ export default function AdminManagePage({ queues, callingQueues }) {
                     >
                       <div className="flex-1">
                         <div className="text-2xl font-bold text-red-600 font-mono mb-1">
-                          {String(queue.queueNumber).padStart(3, '0')}
+                          {queue.displayNumber || String(queue.queueNumber).padStart(3, '0')}
                         </div>
                         <div className="text-sm font-semibold text-gray-800">{queue.name}</div>
                         <div className="text-xs text-gray-500 mt-1">NIM: {queue.nim}</div>
@@ -214,7 +242,7 @@ export default function AdminManagePage({ queues, callingQueues }) {
                       <div className="flex gap-2 w-full md:w-auto">
                         <button
                           className="flex-1 md:flex-none px-5 py-2.5 bg-green-600 text-white rounded-md text-xs font-bold hover:bg-green-700 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
-                          onClick={() => handleCallQueue(queue.id, queue.service)}
+                          onClick={() => handleCallQueue(queue.id, queue.service, serviceId)}
                         >
                           <Phone size={14} /> Panggil
                         </button>

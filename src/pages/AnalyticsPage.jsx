@@ -41,7 +41,7 @@ export default function AnalyticsPage({ queues }) {
     }
 
     const exportData = filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map(q => ({
-      'No. Antrian': String(q.queueNumber).padStart(3, '0'),
+      'No. Antrian': q.displayNumber || String(q.queueNumber).padStart(3, '0'),
       'Nama': q.name,
       'NIM': q.nim,
       'WhatsApp': '+' + (q.whatsapp || ''),
@@ -189,7 +189,7 @@ export default function AnalyticsPage({ queues }) {
               ) : (
                 filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map(q => (
                   <tr key={q.id} className="border-b border-gray-200 hover:bg-gray-50">
-                    <td className="px-5 py-4 text-sm font-bold">{String(q.queueNumber).padStart(3, '0')}</td>
+                    <td className="px-5 py-4 text-sm font-bold">{q.displayNumber || String(q.queueNumber).padStart(3, '0')}</td>
                     <td className="px-5 py-4 text-sm">{q.name}</td>
                     <td className="px-5 py-4 text-sm">{q.nim}</td>
                     <td className="px-5 py-4 text-sm">+{q.whatsapp}</td>

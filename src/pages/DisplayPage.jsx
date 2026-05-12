@@ -49,7 +49,7 @@ export default function DisplayPage({ queues, callingQueues }) {
                 <div className="text-xs opacity-90 uppercase font-bold tracking-wider mb-3">Sedang Dilayani</div>
                 <div className="text-sm font-semibold mb-2 opacity-95">{service}</div>
                 <div className="text-6xl md:text-7xl font-bold my-3 font-mono animate-pulse-slow">
-                  {String(queue.queueNumber).padStart(3, '0')}
+                  {queue.displayNumber || String(queue.queueNumber).padStart(3, '0')}
                 </div>
                 <div className="text-base font-semibold mt-2">{queue.name}</div>
               </div>
@@ -75,7 +75,7 @@ export default function DisplayPage({ queues, callingQueues }) {
             }`}>
               <div className={`absolute top-0 left-0 right-0 h-1 ${queue.status === 'calling' ? 'bg-red-600' : 'bg-gray-400'}`}></div>
               <div className={`text-4xl md:text-5xl font-bold my-4 font-mono ${queue.status === 'calling' ? 'text-red-600' : 'text-gray-500'}`}>
-                {String(queue.queueNumber).padStart(3, '0')}
+                {queue.displayNumber || String(queue.queueNumber).padStart(3, '0')}
               </div>
               <div className="text-sm text-gray-800 font-semibold mb-3 min-h-12 flex items-center justify-center">
                 {queue.service}
